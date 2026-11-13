@@ -1,0 +1,33 @@
+name: decode-xlsx
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  decode:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Decode xlsx and clean up staging
+        run: |
+          set -euo pipefail
+          test -f .encoded/manifest || { echo "no staging present"; exit 0; }
+          while IFS='|' read -r name parts; do
+            [ -n "$name" ] || continue
+            : > /tmp/combined.b64
+            i=1
+            while [ "$i" -le "$parts" ]; do
+              cat ".encoded/${name}.part$(printf '%02d' "$i")" >> /tmp/combined.b64
+              i=$((i+1))
+            done
+            base64 -d /tmp/combined.b64 > "$name"
+          done < .encoded/manifest
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- *.xlsx
+          git rm -rq .encoded || true
+          git rm -q .github/workflows/decode-xlsx.yml || true
+          git rm -q __upload_probe_raw __upload_probe_b64 || true
+          git commit -m "xlsx-decoded: add Excel equivalence files"
+          git push
